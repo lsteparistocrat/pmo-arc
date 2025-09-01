@@ -1,63 +1,64 @@
-name: Jira to Slack Report
+name: Jira to Teams Report
 
 on:
-  workflow_dispatch:        # manual trigger still available
+  workflow_dispatch:   # manual trigger still available
   schedule:
-    - cron: "0 6 * * 1"     # Every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"   # Every Monday at 06:00 UTC
 
 jobs:
   jira-report:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - run: pip install requests slack_sdk
-
-      - name: Run Jira to Slack report
+      - run: pip install requests
+      - name: Run Jira to Teams report
         env:
-          # --- Jira auth & query (same as before) ---
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_JQL: ${{ secrets.JIRA_JQL }}
           JIRA_FIELDS: ${{ secrets.JIRA_FIELDS }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
           TITLE: "Weekly Jira Report"
           TIMEZONE: "UTC"
-
-          # --- Slack config (private channel) ---
-          # Bot token with chat:write + channels:read + groups:read
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          # Channel ID (starts with G... for private channels)
-          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-
-          # --- Optional behavior knobs (you can keep/adjust as needed) ---
-          # Post as a single message or a threaded set of messages:
-          SLACK_SINGLE_MESSAGE: "true"   # "false" to split into a thread if long
-          SLACK_CHUNK_LIMIT: "38000"     # below Slack's ~40k char hard limit
+          # Optional extras:
+          # EXPAND: "changelog"
+          # RECONCILE_ISSUE_IDS: "10001,10042"
+          # JIRA_USE_LEGACY: "true"
+          # reliability knobs:
+          TEAMS_MESSAGE_MODE: "list"   # try "plain" first; !ada[ptive"
+          TEAMS_PROBE: "false"
+          TEAMS_CHUNK_LIMIT: "10000"
+          TEAMS_SINGLE_MESSAGE: "true"       # <— combine into one message/card
           CHILD_LIST_FIELDS: "key,summary,status,assignee"
+          TEAMS_ADAPTIVE_ROWS_PER_CARD: "60" # adaptive safeguard
           PARENT_PRIORITY_FIELD: "customfield_10487"
-          PARENT_PRIORITY_DIRECTION: "asc"
+          PARENT_PRIORITY_DIRECTION: "asc"   # smaller number = higher priority
+          # (optional) if you want to use same field for children too:
           CHILD_PRIORITY_FIELD: "customfield_10487"
-          CHILD_PRIORITY_DIRECTION: "asc"
+          CHILD_PRIORITY_DIRECTION: "asc"        
+          # Rank fields (adjust if your Jira uses different IDs)
+          # PARENT_RANK_FIELD: "customfield_10015"
+          # ISSUE_RANK_FIELD: "customfield_10015"
+          # Sort controls
           GROUP_BY_PARENT: "true"
           SORT_CHILDREN_BY_RANK: "true"
-          USE_EPIC_RANK_FOR_EPICS: "true"
+          USE_EPIC_RANK_FOR_EPICS: "true"    # default
           GROUP_STRIP_PARENT_SUMMARY: "true"
-          AUTO_DETECT_RANK: "true"
-          AUTO_DETECT_EPIC_RANK: "true"
-          PARENT_RANK_DIRECTION: "desc"
-          CHILD_RANK_DIRECTION: "asc"
+          AUTO_DETECT_RANK: "true"   # default, but set explicitly for this test
+          AUTO_DETECT_EPIC_RANK: "true"   # add this
+          PARENT_RANK_DIRECTION: "desc"   # <- new (puts top-of-board first)
+          CHILD_RANK_DIRECTION: "asc"     # leave as asc unless you prefer the reverse
+          # Temporary: print ordering to logs
           DEBUG_ORDER: "true"
           DEBUG_PARENT_PRIORITY: "true"
-          PARENT_PRIORITY_AGG: "min"
+          PARENT_PRIORITY_AGG: "min" 
           PARENT_ENRICH_FORCE_GET: "true"
-        run: python jira_to_slack_report.py
-
-      - name: Probe one parent for Priority Rank (optional debug)
+        run: python jira_to_teams_report.py
+      - name: Probe one parent for Priority Rank
         env:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
@@ -68,3 +69,5 @@ jobs:
           curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
             -H "Accept: application/json" \
             "$JIRA_BASE_URL/rest/api/3/issue/$KEY?fields=customfield_10487,summary,issuetype" | jq .
+
+I need to change this to slack automation for a specific private channel
