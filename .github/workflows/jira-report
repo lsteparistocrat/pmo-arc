@@ -1,1 +1,70 @@
+name: Jira to Slack Report
 
+on:
+  workflow_dispatch:        # manual trigger still available
+  schedule:
+    - cron: "0 6 * * 1"     # Every Monday at 06:00 UTC
+
+jobs:
+  jira-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install requests slack_sdk
+
+      - name: Run Jira to Slack report
+        env:
+          # --- Jira auth & query (same as before) ---
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_JQL: ${{ secrets.JIRA_JQL }}
+          JIRA_FIELDS: ${{ secrets.JIRA_FIELDS }}
+          TITLE: "Weekly Jira Report"
+          TIMEZONE: "UTC"
+
+          # --- Slack config (private channel) ---
+          # Bot token with chat:write + channels:read + groups:read
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          # Channel ID (starts with G... for private channels)
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+
+          # --- Optional behavior knobs (you can keep/adjust as needed) ---
+          # Post as a single message or a threaded set of messages:
+          SLACK_SINGLE_MESSAGE: "true"   # "false" to split into a thread if long
+          SLACK_CHUNK_LIMIT: "38000"     # below Slack's ~40k char hard limit
+          CHILD_LIST_FIELDS: "key,summary,status,assignee"
+          PARENT_PRIORITY_FIELD: "customfield_10487"
+          PARENT_PRIORITY_DIRECTION: "asc"
+          CHILD_PRIORITY_FIELD: "customfield_10487"
+          CHILD_PRIORITY_DIRECTION: "asc"
+          GROUP_BY_PARENT: "true"
+          SORT_CHILDREN_BY_RANK: "true"
+          USE_EPIC_RANK_FOR_EPICS: "true"
+          GROUP_STRIP_PARENT_SUMMARY: "true"
+          AUTO_DETECT_RANK: "true"
+          AUTO_DETECT_EPIC_RANK: "true"
+          PARENT_RANK_DIRECTION: "desc"
+          CHILD_RANK_DIRECTION: "asc"
+          DEBUG_ORDER: "true"
+          DEBUG_PARENT_PRIORITY: "true"
+          PARENT_PRIORITY_AGG: "min"
+          PARENT_ENRICH_FORCE_GET: "true"
+        run: python jira_to_slack_report.py
+
+      - name: Probe one parent for Priority Rank (optional debug)
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          set -e
+          KEY="PMO-223"   # change to one of your parent keys
+          curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+            -H "Accept: application/json" \
+            "$JIRA_BASE_URL/rest/api/3/issue/$KEY?fields=customfield_10487,summary,issuetype" | jq .
