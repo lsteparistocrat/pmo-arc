@@ -516,8 +516,10 @@ def main():
     single_msg = parse_bool(env("TEAMS_SINGLE_MESSAGE", "true"), default=True)
     rows_per_card = int(env("TEAMS_ADAPTIVE_ROWS_PER_CARD", "60"))
 
-    child_list_fields_csv = env("CHILD_LIST_FIELDS", "key,summary,status,assignee,updated")
+    child_list_fields_csv = env("CHILD_LIST_FIELDS", "key,summary,status,assignee,updated,customfield_10922")
     child_list_fields = [s.strip() for s in child_list_fields_csv.split(",") if s.strip()]
+    # Ensure child fields are also requested from Jira (so they render)
+    fields = list(dict.fromkeys(list(fields) + list(child_list_fields)))
 
     missing = [n for n, v in [("JIRA_BASE_URL", base), ("JIRA_EMAIL", email), ("JIRA_API_TOKEN", token),
                                ("JIRA_JQL", jql), ("TEAMS_WEBHOOK_URL", webhook)] if not v]
